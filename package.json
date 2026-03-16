@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "next": "15.0.3",
+    "next": "15.0.7",
     "openai": "^4.52.0",
     "pdf-parse": "^1.1.1",
     "prisma": "^5.22.0",
