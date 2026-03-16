@@ -26,3 +26,4 @@ De app gebruikt OpenAI voor:
 - Chat (`OPENAI_CHAT_MODEL`, standaard `gpt-4.1`)
 - Speech-to-text (`OPENAI_TRANSCRIBE_MODEL`, standaard `gpt-4o-transcribe`)
 - Text-to-speech (`OPENAI_TTS_MODEL`, standaard `gpt-4o-mini-tts`)
+.
