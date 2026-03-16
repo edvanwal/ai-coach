@@ -33,6 +33,16 @@ if ($env:SMOKE_BASE_URL) {
   & "$PSScriptRoot\smoke-check.ps1" -BaseUrl $env:SMOKE_BASE_URL
 }
 
+if ($env:VERCEL_TOKEN) {
+  Write-Host "Extra: Vercel status check..." -ForegroundColor Cyan
+  try {
+    & "$PSScriptRoot\vercel-autofix.ps1" -Fix prisma-buildcommand | Out-Null
+    & "$PSScriptRoot\vercel-debug.ps1" | Out-Null
+  } catch {
+    Write-Warning "Vercel statuscheck/autofix mislukt: $($_.Exception.Message)"
+  }
+}
+
 try {
   & "$PSScriptRoot\notify-done.ps1" "AI coach: deploy script klaar"
 } catch {

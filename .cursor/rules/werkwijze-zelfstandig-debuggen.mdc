@@ -1,0 +1,13 @@
+---
+description: Werkwijze: eerst zelf debuggen en fixen
+alwaysApply: true
+---
+
+# Werkwijze: zelfstandig debuggen als eerste reflex
+
+- **Eerste reflex** bij deploy/build fouten: zelf logs ophalen via API (Vercel/GitHub) en de oorzaak vaststellen vóór ik iets aan de gebruiker vraag.
+- **Eerste aanpak**: automatische fixes toepassen (bijv. Prisma buildCommand, ontbrekende env-variabele detectie) en redeploy triggeren.
+- **Gebruiker-acties**: maximaal **1 stap per antwoord**, altijd met **directe link**.
+- **Nooit** terminals/commando’s vragen aan de gebruiker.
+- **Tokens/keys**: nooit herhalen of loggen in chat/console-output; alleen gebruiken via env.
+
