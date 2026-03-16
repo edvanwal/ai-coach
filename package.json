@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "next lint",
     "reminders:check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-reminders.ps1",
-    "reminders:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-reminder-cron.ps1"
+    "reminders:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-reminder-cron.ps1",
+    "smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-check.ps1"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

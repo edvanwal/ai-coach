@@ -47,7 +47,7 @@ Documenteer in dit bestand welke aanpak gekozen wordt en waar de auth-logica sta
 - **Health**: Handmatige invoer via `/api/health/entry`. Later uitbreidbaar met Apple Health / Google Fit via `lib/health` (HealthSource-interface).
 - **Finance**: Mock provider nu. Voor echte bankkoppeling: PSD2 via Enable Banking, Nordigen of Tink. Keys en consent-flow via env en externe provider.
 
-## Build & start
+## Build & start (lokaal)
 
 ```bash
 npm install
@@ -57,7 +57,17 @@ npm run build
 npm run start
 ```
 
-## Deploy naar Vercel
+## Eenmalige autorisatie (GitHub, Vercel, Neon)
+
+Voor echte \"one‑click\" deploys moet je één keer de volgende koppelingen doen:
+
+1. **GitHub**: repo `edvanwal/ai-coach` bestaat al. Toegang voor scripts gaat via een fine‑grained personal access token (alleen repo `ai-coach`, permissie `Contents: Read & write`).
+2. **Vercel**: GitHub‑app koppelen aan je account en repo `ai-coach` selecteren. Daarna triggert elke push naar `main` automatisch een nieuwe build.
+3. **Neon**: PostgreSQL‑database met `DATABASE_URL` (zoals nu al ingericht). Prisma‑migraties gebruiken dezelfde URL zowel lokaal als in Vercel.
+
+Deze stappen zijn **eenmalig**; daarna kan de agent via git/Vercel/Neon vrijwel alles zelf doen.
+
+## Deploy naar Vercel (Hobby)
 
 1. **Project koppelen**
    - Push de repo naar GitHub.
@@ -81,29 +91,21 @@ npm run start
    - Build command: `npx prisma generate && npm run build`.
    - Output directory: `.next` (default).
 
-5. **Cron (herinneringen)**
-   - Maak `vercel.json` in de projectroot:
-
-   ```json
-   {
-     "crons": [{
-       "path": "/api/cron/check-reminders",
-       "schedule": "* * * * *"
-     }]
-   }
-   ```
-   - Vercel stuurt automatisch de juiste headers; zorg dat `CRON_SECRET` in env staat. (Pro-abonnement nodig voor Cron.)
-
-6. **Deploy**
+5. **Deploy**
    - Klik Deploy. Bij een PostgreSQL/Turso database: draai lokaal `npx prisma migrate deploy` met `DATABASE_URL` van productie, of gebruik een post-deploy script.
 
 ## Herinneringen (cron)
 
-Stel een cron-job in (cron-job.org, GitHub Actions, Vercel Cron) die elke minuut:
+Omdat Vercel Hobby maar **één dagelijkse cron** toestaat, draaien herinneringen **niet** via Vercel Cron maar via een externe dienst.
+
+- **Lokaal / Windows**: `scripts/check-reminders.ps1` is al gekoppeld aan de Windows Taakplanner en roept elke minuut `/api/cron/check-reminders` aan op `http://localhost:3001`.
+- **Productie**: gebruik een externe dienst (bijv. cron-job.org) die elke minuut een GET doet naar jouw publieke URL.
+
+De externe cron-job roept elke minuut:
 
 ```
 GET/POST https://jouw-domein.nl/api/cron/check-reminders
 Header: Authorization: Bearer <CRON_SECRET>
 ```
 
-aanroept. Zonder `CRON_SECRET` retourneert het endpoint 401.
+aan. Zonder `CRON_SECRET` retourneert het endpoint 401.
