@@ -1,0 +1,11 @@
+---
+description: Build en dev server – altijd zelf draaien, nooit gebruiker vragen
+alwaysApply: true
+---
+
+# Build en dev server: agent doet het
+
+Na codewijzigingen:
+- **Altijd** `npm run build` uitvoeren om te controleren dat het bouwt.
+- **Altijd** daarna `npm run dev` starten (achtergrond) zodat de gebruiker kan testen.
+- **Nooit** de gebruiker vragen of instructies geven ("Start met npm run dev", "Herstart de server", etc.).

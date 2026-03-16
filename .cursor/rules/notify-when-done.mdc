@@ -1,0 +1,29 @@
+---
+description: VERPLICHT: Stuur iPhone-push na elke afgeronde actie (laatste stap)
+alwaysApply: true
+---
+
+# iPhone-push: VERPLICHT na elke afgeronde actie
+
+**Je bent pas klaar als je een Pushover-melding hebt gestuurd.**
+
+Geldt voor: elk antwoord, elk plan, debug-modus, vraag beantwoorden – in alle modi. Geen uitzonderingen.
+
+## Checklist vóór je stopt
+- [ ] Mijn actie is afgerond
+- [ ] Ik heb `scripts\notify-done.ps1 "AI coach: klaar"` uitgevoerd
+
+## Wat je moet doen
+Als **laatste actie** na elke afgeronde taak, in de projectroot:
+
+```powershell
+scripts\notify-done.ps1 "AI coach: klaar"
+```
+
+Of met curl (als het script faalt):
+```bash
+curl.exe -X POST "https://api.pushover.net/1/messages.json" -d "token=aqtiiy4px2avrjgqkqe9ud5kepy6au" -d "user=u3aimns74rvy71818nz5xns32eo2o7" -d "message=AI coach: klaar"
+```
+
+## Waarom
+De gebruiker is vaak weg van zijn scherm. Zonder push weet hij niet dat jij klaar bent.

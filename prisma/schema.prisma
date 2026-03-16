@@ -1,0 +1,220 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Productieadvies: PostgreSQL (bijv. Neon) via DATABASE_URL
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id             String   @id @default(cuid())
+  adhdContext    String   @default("")
+  situatie       String   @default("")
+  doelen         String   @default("")
+  persoonlijkheid String?
+  updatedAt      DateTime @updatedAt
+
+  tasks          Task[]
+  files          File[]
+  conversations  Conversation[]
+  conversationMessages ConversationMessage[]
+  reminders      Reminder[]
+
+  // Finance (read-only MVP)
+  financeConsents     FinanceConsent[]
+  financeAccounts     FinanceAccount[]
+  financeCategories   FinanceCategory[]
+  financeTransactions FinanceTransaction[]
+  financeRecurring    FinanceRecurring[]
+
+  // Health (handmatig eerst, later Apple Health / Google Fit)
+  healthMetrics HealthMetric[]
+  healthGoals   HealthGoal[]
+}
+
+model Task {
+  id         String   @id @default(cuid())
+  title      String
+  deadline   String?
+  prioriteit String   @default("normaal")
+  isVervelend Boolean @default(false)
+  afgerond   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  profileId  String
+
+  profile   Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  reminders Reminder[]
+}
+
+model Reminder {
+  id        String   @id @default(cuid())
+  profileId String
+  taskId    String?
+  remindAt  DateTime
+  message   String
+  sent      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  task    Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+}
+
+model File {
+  id           String   @id @default(cuid())
+  filename     String
+  mimeType     String
+  extractedText String
+  uploadedAt   DateTime @default(now())
+  profileId    String
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  profileId String
+  title     String   @default("Nieuw gesprek")
+  createdAt DateTime @default(now())
+
+  profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  messages  ConversationMessage[]
+}
+
+model ConversationMessage {
+  id             String   @id @default(cuid())
+  role           String
+  content        String
+  createdAt      DateTime @default(now())
+  profileId      String
+  conversationId String
+
+  profile      Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------
+// Finance (read-only MVP)
+// ----------------------------
+
+model FinanceConsent {
+  id         String   @id @default(cuid())
+  profileId  String
+  provider   String   // bijv. "mock", later "enablebanking"
+  status     String   @default("not_connected") // not_connected | pending | active | expired | error
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, provider])
+}
+
+model FinanceAccount {
+  id          String   @id @default(cuid())
+  profileId   String
+  provider    String
+  externalId  String   // id bij provider/bank
+  name        String
+  ibanMasked  String?  // alleen gemaskeerd (privacy)
+  currency    String   @default("EUR")
+  balanceCents Int     @default(0)
+  updatedAt   DateTime @updatedAt
+
+  profile       Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  transactions  FinanceTransaction[]
+
+  @@unique([provider, externalId])
+  @@index([profileId])
+}
+
+model FinanceCategory {
+  id        String   @id @default(cuid())
+  profileId String
+  name      String
+  color     String? // optioneel voor UI
+  createdAt DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, name])
+}
+
+model FinanceTransaction {
+  id           String   @id @default(cuid())
+  profileId    String
+  accountId    String
+  provider     String
+  externalId   String
+  bookedAt     DateTime
+  description  String
+  amountCents  Int
+  currency     String   @default("EUR")
+  merchant     String?
+  category     String?  // simple string label (later relationeel)
+  isRecurring  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  profile Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  account FinanceAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([profileId, bookedAt])
+  @@index([accountId, bookedAt])
+}
+
+model FinanceRecurring {
+  id          String   @id @default(cuid())
+  profileId   String
+  name        String
+  cadence     String   // weekly | monthly | yearly | unknown
+  avgAmountCents Int
+  lastSeenAt  DateTime?
+  nextDueAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, nextDueAt])
+}
+
+// ----------------------------
+// Health (handmatig eerst)
+// ----------------------------
+
+model HealthMetric {
+  id        String   @id @default(cuid())
+  profileId String
+  source    String   @default("manual") // manual | apple_health | google_fit | scale (later)
+  date      DateTime // datum van de meting
+  weightKg  Float?   // gewicht in kg
+  fatPct    Float?   // vetpercentage (optioneel)
+  sleepHours Float?  // slaapduur in uren (optioneel)
+  activityMinutes Int? // beweging in minuten (optioneel)
+  note      String?  // vrije notitie
+  createdAt DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, date])
+  @@index([profileId, source])
+}
+
+model HealthGoal {
+  id         String   @id @default(cuid())
+  profileId  String
+  kind       String   // weight | sleep | activity
+  targetValue Float   // target gewicht (kg) of slaapuren of minuten per week
+  targetDate  DateTime? // optionele deadline (bijv. gewicht X op datum Y)
+  unit       String   @default("kg") // kg | hours | minutes_per_week
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, active])
+}

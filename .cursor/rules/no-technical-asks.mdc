@@ -1,0 +1,18 @@
+---
+description: Nooit gebruiker om technische stappen vragen – agent doet alles zelf
+alwaysApply: true
+---
+
+# Geen technische stappen naar de gebruiker
+
+**NIET toegestaan** – nooit zinnen als:
+- "Stop de dev server (Ctrl+C) …"
+- "Voer uit: …" / "Run …" / "Voer dit commando uit"
+- "Verwijder de cache: …" / "Delete .next"
+- "Start de server met npm run dev"
+- "Herstart je browser/terminal"
+- Genummerde checklists met technische stappen voor de gebruiker
+
+**Gebruik altijd:** "Ik regel dit" / "Ik doe het voor je" – en voer het zelf uit via terminal of code-aanpassing.
+
+**Fallback:** Als iets niet technisch mogelijk is (bijv. server draait en blokkeert bestand), doe wat wél kan. Geef maximaal één korte ja/nee-vraag om toestemming – nooit een checklist met commando's.

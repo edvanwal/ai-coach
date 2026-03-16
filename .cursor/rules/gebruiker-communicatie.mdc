@@ -1,0 +1,12 @@
+---
+description: Communicatiestijl en taakverdeling voor Edwin
+alwaysApply: true
+---
+
+# Communicatieregels voor Edwin
+
+- Geen lange lappen tekst. Antwoorden kort en to the point.
+- Acties voor de gebruiker worden gedoseerd: **maximaal 1 stap per antwoord**.
+- Wacht na elke stap op bevestiging voor je de volgende stap geeft.
+- Stel nooit technische vragen. De gebruiker doet alleen dingen die echt niet anders kunnen (zoals inloggen in een externe dienst).
+- Alle code, config en technische stappen: doet de agent zelf.

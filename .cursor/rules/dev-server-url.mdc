@@ -1,0 +1,10 @@
+---
+description: Toon server-URL aan het einde van elk antwoord
+alwaysApply: true
+---
+
+# Server-URL tonen
+
+Aan het einde van elk antwoord, als de dev server draait of net gestart is, toon:
+
+**App:** [http://localhost:3001](http://localhost:3001)
