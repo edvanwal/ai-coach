@@ -5,6 +5,8 @@ type GitHubConfig = {
   baseBranch: string;
 };
 
+import https from "https";
+
 function getGitHubConfig(): GitHubConfig {
   const token = process.env.GITHUB_TOKEN ?? "";
   const owner = process.env.GITHUB_OWNER ?? "edvanwal";
@@ -17,48 +19,80 @@ function getGitHubConfig(): GitHubConfig {
   return { owner, repo, token, baseBranch };
 }
 
-async function ghFetch(path: string, init?: RequestInit): Promise<Response> {
+async function ghRequest<T>(params: {
+  method: "GET" | "POST" | "PUT";
+  path: string;
+  body?: unknown;
+}): Promise<{ status: number; data?: T; text?: string }> {
   const { token } = getGitHubConfig();
-  return fetch(`https://api.github.com${path}`, {
-    ...init,
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "User-Agent": "ai-coach-mobile-control",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
+  const url = new URL(`https://api.github.com${params.path}`);
+  const payload = params.body ? JSON.stringify(params.body) : undefined;
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        method: params.method,
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "User-Agent": "ai-coach-mobile-control",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json",
+          ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          const status = res.statusCode ?? 0;
+          if (!text) return resolve({ status });
+          try {
+            const data = JSON.parse(text) as T;
+            resolve({ status, data });
+          } catch {
+            resolve({ status, text });
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
   });
 }
 
-async function requireOk(res: Response): Promise<void> {
-  if (res.ok) return;
-  const text = await res.text().catch(() => "");
-  throw new Error(`GitHub API fout (${res.status}): ${text || res.statusText}`);
+function requireOk(status: number, text?: string): void {
+  if (status >= 200 && status < 300) return;
+  throw new Error(`GitHub API fout (${status}): ${text ?? "onbekend"}`);
 }
 
 async function getBaseSha(): Promise<string> {
   const { owner, repo, baseBranch } = getGitHubConfig();
-  const res = await ghFetch(`/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`);
-  await requireOk(res);
-  const data = (await res.json()) as { object?: { sha?: string } };
-  const sha = data.object?.sha;
+  const res = await ghRequest<{ object?: { sha?: string } }>({
+    method: "GET",
+    path: `/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`,
+  });
+  requireOk(res.status, res.text);
+  const sha = res.data?.object?.sha;
   if (!sha) throw new Error("Base SHA niet gevonden");
   return sha;
 }
 
 async function createBranch(branchName: string, sha: string): Promise<void> {
   const { owner, repo } = getGitHubConfig();
-  const res = await ghFetch(`/repos/${owner}/${repo}/git/refs`, {
+  const res = await ghRequest({
     method: "POST",
-    body: JSON.stringify({ ref: `refs/heads/${branchName}`, sha }),
+    path: `/repos/${owner}/${repo}/git/refs`,
+    body: { ref: `refs/heads/${branchName}`, sha },
   });
 
   // Als hij al bestaat, is dat ok.
   if (res.status === 422) return;
-  await requireOk(res);
+  requireOk(res.status, res.text);
 }
 
 async function upsertFile(params: {
@@ -72,24 +106,25 @@ async function upsertFile(params: {
 
   // Bestaande SHA ophalen (als file al bestaat op branch)
   let sha: string | undefined;
-  const existing = await ghFetch(
-    `/repos/${owner}/${repo}/contents/${encodeURIComponent(params.path)}?ref=${encodeURIComponent(params.branchName)}`
-  );
-  if (existing.ok) {
-    const obj = (await existing.json()) as { sha?: string };
-    sha = obj.sha;
+  const existing = await ghRequest<{ sha?: string }>({
+    method: "GET",
+    path: `/repos/${owner}/${repo}/contents/${encodeURIComponent(params.path)}?ref=${encodeURIComponent(params.branchName)}`,
+  });
+  if (existing.status >= 200 && existing.status < 300) {
+    sha = existing.data?.sha;
   }
 
-  const res = await ghFetch(`/repos/${owner}/${repo}/contents/${encodeURIComponent(params.path)}`, {
+  const res = await ghRequest({
     method: "PUT",
-    body: JSON.stringify({
+    path: `/repos/${owner}/${repo}/contents/${encodeURIComponent(params.path)}`,
+    body: {
       message: params.message,
       content: encoded,
       branch: params.branchName,
       ...(sha ? { sha } : {}),
-    }),
+    },
   });
-  await requireOk(res);
+  requireOk(res.status, res.text);
 }
 
 export async function createMobileBuildPr(params: {
@@ -126,9 +161,10 @@ export async function createMobileBuildPr(params: {
     message: `mobile: start build ${params.runId}`,
   });
 
-  const prRes = await ghFetch(`/repos/${owner}/${repo}/pulls`, {
+  const prRes = await ghRequest<{ html_url?: string }>({
     method: "POST",
-    body: JSON.stringify({
+    path: `/repos/${owner}/${repo}/pulls`,
+    body: {
       title: `Mobile build: ${params.runId}`,
       head: branchName,
       base: baseBranch,
@@ -141,11 +177,11 @@ export async function createMobileBuildPr(params: {
         params.commandText,
       ].join("\n"),
       draft: true,
-    }),
+    },
   });
-  await requireOk(prRes);
-  const pr = (await prRes.json()) as { html_url?: string };
-  if (!pr.html_url) throw new Error("PR URL ontbreekt");
-  return { prUrl: pr.html_url, branchName };
+  requireOk(prRes.status, prRes.text);
+  const prUrl = prRes.data?.html_url;
+  if (!prUrl) throw new Error("PR URL ontbreekt");
+  return { prUrl, branchName };
 }
 
