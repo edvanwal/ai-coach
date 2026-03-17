@@ -1,6 +1,6 @@
 # Mobile Agent Control
 
-Deze module maakt het mogelijk om Cursor-opdrachten mobiel aan te sturen via:
+Deze module maakt het mogelijk om **Cursor-opdrachten mobiel aan te sturen** (start/status/stop) via:
 
 - Cloud Agents baseline (template + statusmodel)
 - API-commando's
@@ -19,6 +19,37 @@ Optioneel met projectroutering:
 
 - `project ai-coach: new ...`
 - `project template: new ...`
+
+## Snelle workflow (remote bouwen)
+
+Gebruik WhatsApp/Telegram/API als **commandokanaal** (niet als coach-chat).
+
+- **Start**: `new <opdracht>`
+- **Volg**: `status <run-id>`
+- **Stop**: `stop <run-id>`
+
+## PWA cockpit (Control panel)
+
+Naast WhatsApp kun je een **niet-technisch dashboard** gebruiken als cockpit:
+
+- **URL**: `/control-panel` (lokaal: `http://localhost:3001/control-panel`)
+- **Doel**: status + veilige knoppen (geen code/commando’s nodig)
+
+Wat je daar kunt:
+
+- **Status**: “Rustig / Bezig / Vast”, en of er “Wacht op jou” is.
+- **Acties**:
+  - **Maak overdracht**: genereert een compacte overdrachttekst (zonder knippen/plakken) die je in een nieuwe sessie kunt gebruiken.
+  - **Run checks** / **Deploy staging** / **Deploy productie**: MVP-knoppen die acties loggen en als workflow-anker dienen.
+- **Logboek (mensentaal)**: tijdlijn met korte entries (oorzaak → actie → resultaat).
+
+Let op: WhatsApp blijft het primaire **commandokanaal**; de PWA is het **overzicht + knoppen** kanaal.
+
+Voorbeeld:
+
+- `new Refactor de login flow; voeg tests toe; maak PR`
+- `status RUN-20260317-001`
+- `stop RUN-20260317-001`
 
 ## API endpoints
 

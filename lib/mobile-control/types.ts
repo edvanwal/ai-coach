@@ -1,4 +1,5 @@
 export type RunStatus =
+  | "queued"
   | "started"
   | "in_progress"
   | "waiting_confirm"
@@ -52,5 +53,6 @@ export interface CommandRun {
   sender?: string;
   events: RunEvent[];
   confirmCode?: string;
+  confirmExpiresAt?: string;
 }
 

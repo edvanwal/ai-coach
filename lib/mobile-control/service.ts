@@ -4,11 +4,13 @@ import {
   addRunEvent,
   createConfirmCode,
   createRun,
+  dequeueRun,
   enqueueRun,
   findRunByConfirmCode,
   getRun,
   listRuns,
   processQueue,
+  stopRun,
 } from "@/lib/mobile-control/store";
 import type { CommandRequest, CommandRun } from "@/lib/mobile-control/types";
 
@@ -20,14 +22,27 @@ function helpText(): string {
     "- stop <run-id>",
     "- confirm <code>",
     "- help",
+    "",
+    "Doel: Cursor-opdrachten op afstand starten en volgen (geen coach-chat).",
+    "",
+    "Voorbeeld:",
+    "- new Refactor de login flow; voeg tests toe; maak PR",
+    "- status RUN-20260317-001",
+    "- stop RUN-20260317-001",
     "Optioneel met projectroutering: project ai-coach: new ...",
   ].join("\n");
+}
+
+function summarizeRun(run: CommandRun): string {
+  const last = run.events.at(-1);
+  const lastMsg = last?.message ? ` - ${last.message}` : "";
+  return `${run.id} is ${run.status}${lastMsg}`;
 }
 
 function buildTemplate() {
   return {
     title: "Mobiele opdracht-template (Cloud Agents)",
-    statuses: ["started", "in_progress", "done", "blocked"],
+    statuses: ["queued", "started", "in_progress", "done", "blocked", "failed", "stopped"],
     template: [
       "Project: <alias>",
       "Doel: <een zin>",
@@ -65,12 +80,13 @@ export async function handleCommand(input: CommandRequest): Promise<{
     if (!parsed.runId) return { ok: false, message: "Gebruik: status <run-id>" };
     const run = getRun(parsed.runId);
     if (!run) return { ok: false, message: "Run niet gevonden." };
-    return { ok: true, message: `${run.id} is ${run.status}.`, run };
+    return { ok: true, message: summarizeRun(run), run };
   }
 
   if (parsed.type === "stop") {
     if (!parsed.runId) return { ok: false, message: "Gebruik: stop <run-id>" };
-    const run = addRunEvent(parsed.runId, "stopped", "Run handmatig gestopt.");
+    const runWasQueued = dequeueRun(parsed.runId);
+    const run = stopRun(parsed.runId, runWasQueued ? "Run uit wachtrij gehaald en gestopt." : "Run handmatig gestopt.");
     if (!run) return { ok: false, message: "Run niet gevonden." };
     return { ok: true, message: `${run.id} is gestopt.`, run };
   }
@@ -124,7 +140,7 @@ export async function handleCommand(input: CommandRequest): Promise<{
   void processQueue();
   return {
     ok: true,
-    message: `Run ${run.id} gestart.`,
+    message: `Run ${run.id} ontvangen en in wachtrij gezet. Gebruik: status ${run.id}`,
     run,
   };
 }

@@ -56,7 +56,8 @@ $toAdd = @()
 foreach ($key in $whatsappKeys) {
   $val = $envVars[$key]
   if ($val) {
-    $toAdd += @{ key = $key; value = $val; type = "sensitive"; target = @("production", "preview", "development") }
+    # Vercel staat voor sensitive vars geen target=development toe.
+    $toAdd += @{ key = $key; value = $val; type = "sensitive"; target = @("production", "preview") }
   } else {
     Write-Host "Overgeslagen (leeg): $key" -ForegroundColor Yellow
   }
@@ -73,14 +74,9 @@ function ApiGetJson($url) {
 }
 
 function ApiPostJson($url, $obj) {
-  $tmp = New-TemporaryFile
-  try {
-    ($obj | ConvertTo-Json -Depth 10 -Compress) | Set-Content -Path $tmp.FullName -Encoding utf8 -NoNewline
-    $raw = curl.exe -sS -X POST -H "Authorization: Bearer $env:VERCEL_TOKEN" -H "Content-Type: application/json" -d "@$($tmp.FullName)" "$url"
-    return ($raw | ConvertFrom-Json)
-  } finally {
-    Remove-Item -Force $tmp.FullName -ErrorAction SilentlyContinue
-  }
+  $headers = @{ Authorization = "Bearer $env:VERCEL_TOKEN"; "Content-Type" = "application/json" }
+  $body = $obj | ConvertTo-Json -Depth 10 -Compress
+  return Invoke-RestMethod -Uri $url -Method POST -Headers $headers -Body $body
 }
 
 Write-Host "WhatsApp env naar Vercel ($Project, team: $TeamSlug)..." -ForegroundColor Cyan
@@ -95,6 +91,10 @@ $query = "?teamId=$teamId&upsert=true"
 
 foreach ($item in $toAdd) {
   $res = ApiPostJson "$baseUrl$query" $item
+  if ($res.error) {
+    $message = $res.error.message
+    throw "Vercel API fout voor $($item.key): $message"
+  }
   Write-Host "OK: $($item.key) ingesteld" -ForegroundColor Green
 }
 

@@ -1,7 +1,10 @@
 import { randomUUID } from "crypto";
 import type { ChannelType, CommandRun, RunEvent, RunStatus } from "@/lib/mobile-control/types";
+import { createMobileBuildPr } from "@/lib/mobile-control/github";
 
 type QueueItem = { runId: string };
+const RUN_TIMEOUT_MS = 3 * 60 * 1000;
+const CONFIRM_TTL_MS = 10 * 60 * 1000;
 
 const globalForControl = globalThis as unknown as {
   controlRuns?: Map<string, CommandRun>;
@@ -35,6 +38,7 @@ export function createRun(params: {
   initialStatus?: RunStatus;
 }): CommandRun {
   const now = new Date().toISOString();
+  const isWaitingConfirm = params.initialStatus === "waiting_confirm";
   const run: CommandRun = {
     id: nextRunId(),
     projectAlias: params.projectAlias,
@@ -46,6 +50,9 @@ export function createRun(params: {
     channel: params.channel,
     sender: params.sender,
     confirmCode: params.confirmCode,
+    confirmExpiresAt: isWaitingConfirm
+      ? new Date(Date.now() + CONFIRM_TTL_MS).toISOString()
+      : undefined,
     events: [
       {
         at: now,
@@ -80,8 +87,24 @@ export function listRuns(limit = 20): CommandRun[] {
     .slice(0, limit);
 }
 
+export function dequeueRun(runId: string): boolean {
+  const idx = queue.findIndex((q) => q.runId === runId);
+  if (idx === -1) return false;
+  queue.splice(idx, 1);
+  return true;
+}
+
+export function stopRun(runId: string, reason = "Run handmatig gestopt."): CommandRun | null {
+  const run = getRun(runId);
+  if (!run) return null;
+  dequeueRun(runId);
+  if (run.status === "done" || run.status === "failed" || run.status === "stopped") return run;
+  return addRunEvent(runId, "stopped", reason);
+}
+
 export function enqueueRun(runId: string): void {
   queue.push({ runId });
+  addRunEvent(runId, "queued", "In wachtrij gezet.");
 }
 
 function sleep(ms: number): Promise<void> {
@@ -91,50 +114,37 @@ function sleep(ms: number): Promise<void> {
 async function processRun(runId: string): Promise<void> {
   const run = getRun(runId);
   if (!run) return;
-  if (run.status === "stopped" || run.status === "failed") return;
+  if (run.status === "stopped" || run.status === "failed" || run.status === "done") return;
 
-  const lowerText = run.commandText.toLowerCase();
-  const isPlanFlow = lowerText.startsWith("plan_coach_flow");
+  addRunEvent(runId, "in_progress", "Uitvoering gestart.");
 
-  if (isPlanFlow) {
-    const [, rawTitle] = run.commandText.split(":", 2);
-    const title = (rawTitle ?? "").trim() || "nieuwe coach-flow";
+  const work = (async () => {
+    // MVP: maak een voorstel-wijziging (PR) aan op GitHub, zodat "remote bouwen" echt output oplevert.
+    addRunEvent(runId, "in_progress", "Voorstel-wijziging aanmaken...");
+    const { prUrl } = await createMobileBuildPr({
+      runId,
+      commandText: run.commandText,
+      sender: run.sender,
+    });
+    if (getRun(runId)?.status === "stopped") return;
+    addRunEvent(runId, "done", `Klaar. PR: ${prUrl}`);
+  })();
 
-    addRunEvent(runId, "in_progress", `Plan voor coach-flow: ${title}`);
-    await sleep(200);
-    addRunEvent(
-      runId,
-      "in_progress",
-      "Stap 1 – Situatie & doelgroep helder maken."
-    );
-    await sleep(200);
-    addRunEvent(
-      runId,
-      "in_progress",
-      "Stap 2 – Sessies/gespreksstappen schetsen (beginnend, midden, afsluiting)."
-    );
-    await sleep(200);
-    addRunEvent(
-      runId,
-      "in_progress",
-      "Stap 3 – Concrete prompts / vragen per stap formuleren."
-    );
-    await sleep(200);
-    addRunEvent(
-      runId,
-      "in_progress",
-      "Stap 4 – Randvoorwaarden vastleggen (ethiek, grenzen, no‑go’s)."
-    );
-    await sleep(200);
-    addRunEvent(runId, "done", "Plan-coach-flow run afgerond (conceptplan klaar).");
-    return;
+  const timeout = (async () => {
+    await sleep(RUN_TIMEOUT_MS);
+    throw new Error("timeout");
+  })();
+
+  try {
+    await Promise.race([work, timeout]);
+  } catch (err) {
+    if (getRun(runId)?.status === "stopped") return;
+    const message =
+      err instanceof Error && err.message !== "timeout"
+        ? `Run faalde: ${err.message}`
+        : "Run faalde (timeout).";
+    addRunEvent(runId, "failed", message);
   }
-
-  addRunEvent(runId, "in_progress", "Analyse gestart.");
-  await sleep(400);
-  addRunEvent(runId, "in_progress", "Uitvoering bezig.");
-  await sleep(400);
-  addRunEvent(runId, "done", "Run afgerond.");
 }
 
 export async function processQueue(): Promise<void> {
@@ -159,6 +169,10 @@ export function findRunByConfirmCode(confirmCode: string): CommandRun | null {
   const norm = confirmCode.toUpperCase();
   for (const run of runs.values()) {
     if (run.confirmCode?.toUpperCase() === norm && run.status === "waiting_confirm") {
+      if (run.confirmExpiresAt && Date.parse(run.confirmExpiresAt) < Date.now()) {
+        addRunEvent(run.id, "failed", "Confirm-code verlopen.");
+        return null;
+      }
       return run;
     }
   }
