@@ -7,6 +7,8 @@ type GitHubConfig = {
 
 import https from "https";
 
+const httpsAgent = new https.Agent({ keepAlive: true });
+
 function getGitHubConfig(): GitHubConfig {
   const token = process.env.GITHUB_TOKEN ?? "";
   const owner = process.env.GITHUB_OWNER ?? "edvanwal";
@@ -28,41 +30,60 @@ async function ghRequest<T>(params: {
   const url = new URL(`https://api.github.com${params.path}`);
   const payload = params.body ? JSON.stringify(params.body) : undefined;
 
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        method: params.method,
-        hostname: url.hostname,
-        path: url.pathname + url.search,
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${token}`,
-          "User-Agent": "ai-coach-mobile-control",
-          "X-GitHub-Api-Version": "2022-11-28",
-          "Content-Type": "application/json",
-          ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
+  const attemptOnce = () =>
+    new Promise<{ status: number; data?: T; text?: string }>((resolve, reject) => {
+      const req = https.request(
+        {
+          method: params.method,
+          hostname: url.hostname,
+          path: url.pathname + url.search,
+          agent: httpsAgent,
+          headers: {
+            Accept: "application/vnd.github+json",
+            Authorization: `Bearer ${token}`,
+            "User-Agent": "ai-coach-mobile-control",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "Content-Type": "application/json",
+            ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
+          },
         },
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
-        res.on("end", () => {
-          const text = Buffer.concat(chunks).toString("utf8");
-          const status = res.statusCode ?? 0;
-          if (!text) return resolve({ status });
-          try {
-            const data = JSON.parse(text) as T;
-            resolve({ status, data });
-          } catch {
-            resolve({ status, text });
-          }
-        });
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+          res.on("end", () => {
+            const text = Buffer.concat(chunks).toString("utf8");
+            const status = res.statusCode ?? 0;
+            if (!text) return resolve({ status });
+            try {
+              const data = JSON.parse(text) as T;
+              resolve({ status, data });
+            } catch {
+              resolve({ status, text });
+            }
+          });
+        }
+      );
+      req.on("error", reject);
+      req.setTimeout(12_000, () => req.destroy(new Error("timeout")));
+      if (payload) req.write(payload);
+      req.end();
+    });
+
+  // Retries voor sporadische TLS/egress issues op serverless.
+  const maxAttempts = 3;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await attemptOnce();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+        continue;
       }
-    );
-    req.on("error", reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("GitHub request faalde");
 }
 
 function requireOk(status: number, text?: string): void {
