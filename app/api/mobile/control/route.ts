@@ -10,7 +10,16 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as { text?: string; channel?: string; sender?: string };
+    const raw = await req.text();
+    let body: { text?: string; channel?: string; sender?: string };
+    try {
+      body = JSON.parse(raw) as { text?: string; channel?: string; sender?: string };
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: "Ongeldige JSON body" },
+        { status: 400, headers: noStoreHeaders() }
+      );
+    }
     const text = (body.text ?? "").trim();
     const sender = body.sender?.trim();
     const channel = (body.channel ?? "api").trim() as "api" | "whatsapp" | "telegram" | "slack";
