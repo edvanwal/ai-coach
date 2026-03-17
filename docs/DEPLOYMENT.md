@@ -57,6 +57,38 @@ npm run build
 npm run start
 ```
 
+## Project-identifiers (Vercel, productie-URL)
+
+Vul hier de waarden in zodra ze vaststaan; de agent leest ze hier en vraagt ze niet opnieuw.
+
+| Sleutel | Waarde | Opmerking |
+|---------|--------|------------|
+| Vercel team slug | `edwins-projects-e31e97b7` | Zichtbaar in Vercel URL |
+| Vercel project slug | `ai-coach` | Exacte projectnaam in Vercel |
+| Productie-URL | `https://ai-coach-cnsshx5jp-edwins-projects-e31e97b7.vercel.app` | Huidige deployment-URL (kan per deploy wisselen) |
+
+Tokens (VERCEL_TOKEN, enz.) staan in `.env.local`; nooit in dit bestand.
+
+## WhatsApp live (mobile control)
+
+**Korte checklist voor jou:**
+1) Haal tokens op bij Meta (Verify token, App secret, Access token, Phone number ID).
+2) Geef de vier waarden aan de agent → die zet ze in `.env.local` en synct naar Vercel.
+3) Voer `scripts/whatsapp-webhook-url.ps1` uit voor de webhook-URL (of gebruik de URL hieronder).
+4) Meta → WhatsApp → Configuration → Webhook: plak URL + Verify token, Subscribe op `messages`.
+
+Om WhatsApp als commandokanaal live te zetten:
+
+1. **Meta-app en tokens** – Zie [WhatsApp in 5 stappen](MOBILE_AGENT_CONTROL.md#whatsapp-in-5-stappen) in `docs/MOBILE_AGENT_CONTROL.md`. Haal daar **Verify token**, **App secret**, **Access token** en **Phone number ID** op.
+2. **Env lokaal** – Zet in `.env.local`: `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`. Optioneel: `MOBILE_CONTROL_ALLOWLIST` (comma-gescheiden WhatsApp user-id’s).
+3. **Env in Vercel** – Voer `scripts/vercel-set-whatsapp-env.ps1` uit (leest uit `.env.local`, synct naar Vercel). Of handmatig: [Vercel Dashboard](https://vercel.com/dashboard) → project **ai-coach** → Settings → Environment Variables. Redeploy na het toevoegen.
+4. **Webhook bij Meta** – In [Meta for Developers](https://developers.facebook.com) → jouw app → WhatsApp → Configuration → Webhook:
+   - **Callback URL**: jouw productie-URL + `/api/mobile/whatsapp/webhook`.  
+     Actuele URL: [docs/DEPLOYMENT.md](DEPLOYMENT.md) (tabel Productie-URL) of voer `scripts/whatsapp-webhook-url.ps1` uit voor copy-paste.
+   - **Verify token**: exact dezelfde waarde als `WHATSAPP_VERIFY_TOKEN`. Opslaan, daarna op **Subscribe** klikken en o.a. `messages` aanvinken.
+
+Daarna gaan inkomende berichten naar dat WhatsApp-nummer naar de app; je kunt commando’s sturen (bijv. `help`, `new plan_coach_flow: ...`). Controle of config goed staat: [GET /api/mobile/whatsapp/status](https://ai-coach-cnsshx5jp-edwins-projects-e31e97b7.vercel.app/api/mobile/whatsapp/status) (vervang door jouw productie-URL als die anders is).
+
 ## Eenmalige autorisatie (GitHub, Vercel, Neon)
 
 Voor echte \"one‑click\" deploys moet je één keer de volgende koppelingen doen:
